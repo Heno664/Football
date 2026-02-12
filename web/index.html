@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Football Stars</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>⚽ Football Stars</h1>
+
+        <div class="buttons">
+            <button onclick="daily()">🎁 Daily Reward</button>
+            <button onclick="openPack()">🎁 Open Pack (300)</button>
+            <button onclick="playMatch()">⚔️ Play Match</button>
+            <button onclick="loadMarket()">🛒 Market</button>
+            <button onclick="buyCoins(100)">💰 Buy 100 Coins</button>
+            <button onclick="buyCoins(500)">💰 Buy 500 Coins</button>
+            <button onclick="buyCoins(1000)">💰 Buy 1000 Coins</button>
+        </div>
+
+        <h2>My Cards</h2>
+        <div id="card-area" class="cards-grid"></div>
+
+        <h2>Market</h2>
+        <div id="market-area" class="cards-grid"></div>
+    </div>
+</body>
+<script src="script.js"></script>
+</html>
