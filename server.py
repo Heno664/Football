@@ -17,7 +17,7 @@ def home():
     return "Server is running", 200
 
 def tg_send_message(chat_id: int, text: str, reply_markup=None):
-    url = f"https://api.telegram.org/bot{8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY}/sendMessage"
+    url = f"https://api.telegram.org/bot{"8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY"}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
     if reply_markup:
         payload["reply_markup"] = reply_markup
@@ -197,6 +197,7 @@ def add_coins():
 # Run server
 if __name__=="__main__":
     app.run(port=5000)
+
 
 
 
