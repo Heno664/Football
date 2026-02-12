@@ -2,30 +2,53 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Football Stars</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="/web/style.css">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>⚽ Football Stars</h1>
+        <header class="app-header">
+            <h1>⚽ Football Stars</h1>
+            <div class="stats">
+                <span class="chip">💰 <b id="coins">0</b></span>
+                <span class="chip">🃏 <b id="cards-count">0</b></span>
+            </div>
+        </header>
 
-        <div class="buttons">
-            <button onclick="daily()">🎁 Daily Reward</button>
-            <button onclick="openPack()">🎁 Open Pack (300)</button>
-            <button onclick="playMatch()">⚔️ Play Match</button>
-            <button onclick="loadMarket()">🛒 Market</button>
-            <button onclick="buyCoins(100)">💰 Buy 100 Coins</button>
-            <button onclick="buyCoins(500)">💰 Buy 500 Coins</button>
-            <button onclick="buyCoins(1000)">💰 Buy 1000 Coins</button>
-        </div>
+        <section class="panel actions">
+            <h2>Действия</h2>
+            <div class="buttons">
+                <button class="primary" onclick="daily()">🎁 Daily Reward</button>
+                <button class="primary" onclick="openPack()">🎴 Open Pack (300)</button>
+                <button onclick="playMatch()">⚔️ Play Match</button>
+                <button onclick="loadMarket()">🛒 Обновить Market</button>
+                <button onclick="buyCoins(100)">💰 +100 Coins</button>
+                <button onclick="buyCoins(500)">💰 +500 Coins</button>
+                <button onclick="buyCoins(1000)">💰 +1000 Coins</button>
+            </div>
+        </section>
 
-        <h2>My Cards</h2>
-        <div id="card-area" class="cards-grid"></div>
+        <section class="panel">
+            <div class="section-title">
+                <h2>Мои карты</h2>
+                <button class="small" onclick="loadMyPlayers()">Обновить</button>
+            </div>
+            <div id="card-area" class="cards-grid"></div>
+        </section>
 
-        <h2>Market</h2>
-        <div id="market-area" class="cards-grid"></div>
+        <section class="panel">
+            <div class="section-title">
+                <h2>Market</h2>
+                <button class="small" onclick="loadMarket()">Обновить</button>
+            </div>
+            <div id="market-area" class="cards-grid"></div>
+        </section>
     </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="/web/script.js"></script>
 </body>
-<script src="script.js"></script>
 </html>
