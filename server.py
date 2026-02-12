@@ -3,14 +3,13 @@ import json
 import time
 import random
 import sqlite3
-from flask import Flask, request
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 import requests
 
 BOT_TOKEN = os.environ.get("8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY", "8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY")
 WEBAPP_URL = "https://football-production-d728.up.railway.app/web/index.html"  # ссылка на твою игру
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="web", static_url_path="/web")
 
 @app.route("/", methods=["GET"])
 def home():
@@ -110,6 +109,10 @@ def daily():
     conn.commit()
     return {"message":f"+{reward} монет 💰"}
 
+@app.route("/game")
+def game():
+    return send_from_directory("web", "index.html")
+
 # Open pack
 @app.route("/open_pack", methods=["POST"])
 def open_pack():
@@ -197,6 +200,7 @@ def add_coins():
 # Run server
 if __name__=="__main__":
     app.run(port=5000)
+
 
 
 
