@@ -5,22 +5,48 @@ import random
 import sqlite3
 from flask import Flask, request
 from flask import Flask, request
+import requests
+
+BOT_TOKEN = os.environ.get("8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY", "8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY")
+WEBAPP_URL = "https://football-production-d728.up.railway.app/web/index.html"  # ссылка на твою игру
 
 app = Flask(__name__)
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
     return "Server is running", 200
 
+def tg_send_message(chat_id: int, text: str, reply_markup=None):
+    url = f"https://api.telegram.org/bot{8577376940:AAGT_NbFUdmIQtDy1jKoRQ_dnokAgZVkRPY}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    requests.post(url, json=payload, timeout=10)
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json(silent=True)
-    print("TG UPDATE:", data)
-    return "ok", 200
+    data = request.get_json(silent=True) or {}
+    message = data.get("message") or {}
+    text = message.get("text", "")
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    if not chat_id:
+        return "ok", 200
+
+    # /start
+    if text.startswith("/start"):
+        keyboard = {
+            "inline_keyboard": [[
+                {"text": "⚽ Играть", "web_app": {"url": WEBAPP_URL}}
+            ]]
+        }
+        tg_send_message(chat_id, "Привет! Нажми «Играть» чтобы открыть игру 👇", keyboard)
+        return "ok", 200
+
+    # любые другие сообщения
+    tg_send_message(chat_id, "Напиши /start чтобы открыть игру ⚽")
+    return "ok", 200
 
 # ---------- Database ----------
 conn = sqlite3.connect("game.db", check_same_thread=False)
@@ -171,6 +197,7 @@ def add_coins():
 # Run server
 if __name__=="__main__":
     app.run(port=5000)
+
 
 
 
