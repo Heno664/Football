@@ -96,7 +96,15 @@ def match():
         conn.commit()
         return {"result":"win","reward":reward,"your":power,"enemy":enemy}
     return {"result":"lose","your":power,"enemy":enemy}
+ @app.route("/")
+def home():
+    return "Bot is running"
 
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json()
+    print(data)
+    return "ok"
 # Market
 @app.route("/market")
 def market():
@@ -152,4 +160,5 @@ def add_coins():
 # Run server
 if __name__=="__main__":
     app.run(port=5000)
+
 
