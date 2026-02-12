@@ -2,7 +2,15 @@ from flask import Flask, request
 import sqlite3, json, random, time
 
 app = Flask(__name__, static_folder="web", static_url_path="/web")
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(silent=True)
+    print("TG UPDATE:", data)
+    return "ok", 200
 
+@app.route("/")
+def home():
+    return "OK", 200
 # ---------- Database ----------
 conn = sqlite3.connect("game.db", check_same_thread=False)
 cur = conn.cursor()
@@ -96,15 +104,7 @@ def match():
         conn.commit()
         return {"result":"win","reward":reward,"your":power,"enemy":enemy}
     return {"result":"lose","your":power,"enemy":enemy}
- @app.route("/")
-def home():
-    return "Bot is running"
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
-    print(data)
-    return "ok"
 # Market
 @app.route("/market")
 def market():
@@ -160,5 +160,6 @@ def add_coins():
 # Run server
 if __name__=="__main__":
     app.run(port=5000)
+
 
 
