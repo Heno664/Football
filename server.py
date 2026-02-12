@@ -1,16 +1,22 @@
+import os
 from flask import Flask, request
-import sqlite3, json, random, time
 
-app = Flask(__name__, static_folder="web", static_url_path="/web")
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Server is running", 200
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True)
     print("TG UPDATE:", data)
     return "ok", 200
 
-@app.route("/")
-def home():
-    return "OK", 200
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
 # ---------- Database ----------
 conn = sqlite3.connect("game.db", check_same_thread=False)
 cur = conn.cursor()
@@ -160,6 +166,7 @@ def add_coins():
 # Run server
 if __name__=="__main__":
     app.run(port=5000)
+
 
 
 
