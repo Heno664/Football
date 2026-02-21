@@ -11,7 +11,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 PROVIDER_TOKEN = os.environ.get("PROVIDER_TOKEN", "")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://football-production-d728.up.railway.app/web/index.html")
 
-app = Flask(__name__, static_folder="web", static_url_path="/web")
+app = Flask(server.py, static_folder="web", static_url_path="/web")
 conn = sqlite3.connect("game.db", check_same_thread=False)
 
 conn.execute(
