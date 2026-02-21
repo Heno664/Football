@@ -1,73 +1,674 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Football Stars</title>
-<link rel="stylesheet" href="/web/style.css">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <title>Football Mini App</title>
+  <style>
+    :root{
+      --bg:#0b1020; --card:#121a33; --text:#e9eeff; --muted:#a9b2d6;
+      --accent:#43d17a; --accent2:#5aa6ff; --danger:#ff5a6a;
+      --shadow: 0 12px 30px rgba(0,0,0,.35);
+      --r:18px;
+    }
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+    body{margin:0;background:radial-gradient(1000px 600px at 30% -10%, #1b2a66 0, transparent 60%),
+                  radial-gradient(900px 500px at 90% 10%, #155a43 0, transparent 55%),
+                  var(--bg); color:var(--text);}
+    .wrap{max-width:980px;margin:0 auto;padding:14px 14px 90px;}
+    .top{display:flex;gap:10px;align-items:center;justify-content:space-between;}
+    .brand{font-weight:800;letter-spacing:.4px}
+    .pill{background:rgba(255,255,255,.08);padding:8px 12px;border-radius:999px;display:flex;gap:10px;align-items:center}
+    .pill small{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin-top:12px}
+    .card{background:rgba(18,26,51,.92);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);box-shadow:var(--shadow);padding:14px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{border:0;border-radius:14px;padding:12px 14px;font-weight:700;cursor:pointer;color:#061024;background:linear-gradient(135deg,var(--accent),#a6ffcb);}
+    .btn2{border:0;border-radius:14px;padding:12px 14px;font-weight:700;cursor:pointer;color:#071126;background:linear-gradient(135deg,var(--accent2),#b7dcff);}
+    .btnGhost{border:1px solid rgba(255,255,255,.18);background:transparent;color:var(--text);border-radius:14px;padding:12px 14px;font-weight:700;cursor:pointer}
+    .btnDanger{border:0;border-radius:14px;padding:12px 14px;font-weight:800;cursor:pointer;color:#21040a;background:linear-gradient(135deg,#ff5a6a,#ffb0b8);}
+    .muted{color:var(--muted)}
+    .tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(6,10,22,.92);backdrop-filter: blur(10px);
+          border-top:1px solid rgba(255,255,255,.08);display:flex;gap:6px;justify-content:center;padding:10px}
+    .tab{padding:10px 12px;border-radius:14px;color:var(--muted);cursor:pointer;font-weight:700}
+    .tab.active{color:var(--text);background:rgba(255,255,255,.08)}
+    .section{display:none}
+    .section.active{display:block}
+    .list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    @media (max-width:860px){.grid{grid-template-columns:1fr}.list{grid-template-columns:1fr}}
+    .player{display:flex;gap:10px;align-items:center}
+    .player img{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#0f1730;border:1px solid rgba(255,255,255,.08)}
+    .player b{display:block}
+    .badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+      padding:6px 10px;border-radius:999px;font-weight:800}
+    .line{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
+
+    /* Pack animation */
+    .packStage{display:flex;flex-direction:column;align-items:center;gap:10px}
+    .pack{width:210px;height:270px;border-radius:22px;background:
+      radial-gradient(140px 90px at 30% 20%, rgba(255,255,255,.35), transparent 60%),
+      linear-gradient(135deg,#2b3bff,#43d17a);
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow: 0 25px 60px rgba(0,0,0,.45);
+      position:relative;overflow:hidden;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      font-weight:900;font-size:26px;letter-spacing:.6px;
+    }
+    .pack::after{content:"";position:absolute;inset:-40px;transform:rotate(18deg);
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);
+      animation:shine 2.6s linear infinite;}
+    @keyframes shine{0%{transform:translateX(-60%) rotate(18deg)}100%{transform:translateX(60%) rotate(18deg)}}
+    .pack.opening{animation:shake .8s ease-in-out infinite}
+    @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+    .reveal{display:none;margin-top:10px;width:100%}
+    .reveal.active{display:block}
+    .toast{margin-top:8px;color:var(--muted);min-height:20px}
+    input,select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);
+      border-radius:14px;padding:12px 12px;outline:none;width:100%}
+    label{font-size:13px;color:var(--muted);display:block;margin:8px 0 6px}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header class="app-header panel">
-            <div>
-                <h1>⚽ Football Stars</h1>
-                <p class="muted">Собери команду мечты, побеждай и торгуй игроками</p>
-            </div>
-            <div class="stats">
-                <span class="chip">💰 <b id="coins">0</b></span>
-                <span class="chip">🃏 <b id="cards-count">0</b></span>
-                <span class="chip">⚡ <b id="team-power">0</b></span>
-                <span class="chip">🏆 <b id="rating">1000</b></span>
-            </div>
-        </header>
-
-        <section class="panel actions">
-            <div class="section-title">
-                <h2>Быстрые действия</h2>
-                <span id="daily-timer" class="muted">Daily: готов</span>
-            </div>
-            <div class="buttons">
-                <button class="primary" onclick="daily()">🎁 Daily Reward</button>
-                <button class="primary" onclick="openPack()">🎴 Открыть пак (300)</button>
-                <button onclick="playMatch()">⚔️ Играть матч</button>
-                <button onclick="loadLeaderboard()">🥇 Рейтинг</button>
-                <button onclick="buyCoins(100)">💰 +100 Coins</button>
-                <button onclick="buyCoins(500)">💰 +500 Coins</button>
-                <button onclick="buyCoins(1000)">💰 +1000 Coins</button>
-            </div>
-        </section>
-
-        <section class="panel">
-            <div class="section-title">
-                <h2>Моя команда</h2>
-                <div class="inline-actions">
-                    <input id="search-my" placeholder="Поиск игрока..." oninput="loadMyPlayers()">
-                    <button class="small" onclick="loadMyPlayers()">Обновить</button>
-                </div>
-            </div>
-            <div id="card-area" class="cards-grid"></div>
-        </section>
-
-        <section class="panel">
-            <div class="section-title">
-                <h2>Трансферный рынок</h2>
-                <button class="small" onclick="loadMarket()">Обновить</button>
-            </div>
-            <div id="market-area" class="cards-grid"></div>
-        </section>
-
-        <section class="panel">
-            <div class="section-title">
-                <h2>Топ игроков (rating)</h2>
-                <button class="small" onclick="loadLeaderboard()">Обновить</button>
-            </div>
-            <div id="leaderboard" class="leaderboard"></div>
-        </section>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">⚽ Football Mini App</div>
+      <div class="pill">
+        <div>🪙 <b id="coins">0</b></div>
+        <div>🎁 <b id="packs">0</b></div>
+        <div class="badge" id="vipBadge" style="display:none">⭐ VIP</div>
+      </div>
     </div>
 
-    <div id="toast" class="toast"></div>
+    <div class="grid">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div class="muted">Профиль</div>
+            <div><b id="uname">—</b> <span class="muted">ID:</span> <span id="uid">—</span></div>
+            <div class="muted" id="levelLine">Уровень: 1 • XP: 0/100</div>
+          </div>
+          <button class="btnGhost" id="refresh">Обновить</button>
+        </div>
+        <div class="line"></div>
+        <div class="row">
+          <button class="btn" id="daily">Ежедневная награда</button>
+          <button class="btn2" id="match">Сыграть матч</button>
+        </div>
+        <div class="toast" id="toast"></div>
+      </div>
 
-    <script src="/web/script.js"></script>
+      <div class="card">
+        <div class="muted">Клуб</div>
+        <div class="two">
+          <div>
+            <label>Выбери клуб</label>
+            <select id="clubSelect"></select>
+          </div>
+          <div>
+            <label>Название (твой стиль)</label>
+            <input id="clubName" placeholder="Напр. Kings FC"/>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btnGhost" id="saveClub">Сохранить</button>
+        </div>
+        <div class="toast" id="clubToast"></div>
+      </div>
+    </div>
+
+    <!-- Sections -->
+    <div class="card section active" id="sec_home" style="margin-top:12px">
+      <div class="muted">Коллекция</div>
+      <div class="list" id="inv"></div>
+      <div class="toast" id="invToast"></div>
+    </div>
+
+    <div class="card section" id="sec_packs" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">Паки</div>
+          <div><b>Открывай паки и получай игроков</b></div>
+        </div>
+      </div>
+      <div class="line"></div>
+
+      <div class="packStage">
+        <div class="pack" id="packBox">PACK</div>
+        <button class="btn2" id="openPackBtn">Открыть 1 пак</button>
+        <div class="toast" id="packToast"></div>
+
+        <div class="reveal" id="reveal">
+          <div class="card" style="background:rgba(255,255,255,.06)">
+            <div class="player">
+              <img id="rp_img" src="" alt="">
+              <div>
+                <b id="rp_name">—</b>
+                <div class="muted"><span id="rp_pos">—</span> • Rating: <span id="rp_rat">—</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:12px">Нужны паки? Купи в магазине ⭐</div>
+    </div>
+
+    <div class="card section" id="sec_market" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">Маркет</div>
+          <div><b>Покупай/продавай игроков за монеты</b></div>
+        </div>
+        <button class="btnGhost" id="loadMarket">Обновить</button>
+      </div>
+      <div class="line"></div>
+
+      <div class="two">
+        <div>
+          <label>Мой игрок для продажи</label>
+          <select id="sellPlayer"></select>
+        </div>
+        <div>
+          <label>Цена (монеты)</label>
+          <input id="sellPrice" type="number" min="1" value="500"/>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn2" id="sellBtn">Выставить</button>
+      </div>
+      <div class="toast" id="marketToast"></div>
+
+      <div class="line"></div>
+      <div class="muted">Лоты</div>
+      <div class="list" id="marketList"></div>
+    </div>
+
+    <div class="card section" id="sec_p2p" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">P2P сделка (игрок ↔ монеты)</div>
+          <div><b>Безопасно через эскроу</b></div>
+        </div>
+        <button class="btnGhost" id="loadP2P">Обновить</button>
+      </div>
+      <div class="line"></div>
+
+      <div class="two">
+        <div>
+          <label>Игрок (из твоей коллекции)</label>
+          <select id="p2pPlayer"></select>
+        </div>
+        <div>
+          <label>Цена (монеты)</label>
+          <input id="p2pPrice" type="number" min="1" value="800"/>
+        </div>
+      </div>
+      <div class="two">
+        <div>
+          <label>Buyer ID (Telegram user id)</label>
+          <input id="p2pBuyer" placeholder="Напр. 123456789"/>
+        </div>
+        <div>
+          <label>Комиссия</label>
+          <input id="p2pFeeHint" disabled value="Покупатель платит +3%"/>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="p2pCreate">Создать сделку</button>
+      </div>
+      <div class="toast" id="p2pToast"></div>
+
+      <div class="line"></div>
+      <div class="muted">Мои сделки</div>
+      <div class="list" id="p2pList"></div>
+    </div>
+
+    <div class="card section" id="sec_shop" style="margin-top:12px">
+      <div class="muted">Магазин ⭐ Telegram Stars</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn2" onclick="buy('pack_small')">Пак Small (10⭐)</button>
+        <button class="btn2" onclick="buy('pack_big')">Пак Big (45⭐)</button>
+        <button class="btn2" onclick="buy('coins_1k')">1000 монет (15⭐)</button>
+        <button class="btn2" onclick="buy('sub_vip')">VIP 30 дней (50⭐)</button>
+      </div>
+      <div class="toast" id="shopToast"></div>
+      <div class="muted" style="margin-top:12px">После оплаты нажми “Обновить”, чтобы увидеть бонусы.</div>
+    </div>
+
+    <div class="card section" id="sec_tx" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">История операций</div>
+          <div><b>Монеты / паки / XP / сделки</b></div>
+        </div>
+        <button class="btnGhost" id="loadTx">Обновить</button>
+      </div>
+      <div class="line"></div>
+      <div id="txList" class="list"></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="home">🏠</div>
+    <div class="tab" data-tab="packs">🎁</div>
+    <div class="tab" data-tab="market">🛒</div>
+    <div class="tab" data-tab="p2p">🤝</div>
+    <div class="tab" data-tab="shop">⭐</div>
+    <div class="tab" data-tab="tx">📜</div>
+  </div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const $ = (id)=>document.getElementById(id);
+
+  let userId = 0;
+  let username = "";
+  let inventory = [];
+
+  function showToast(id, text){
+    $(id).textContent = text || "";
+  }
+
+  function setActive(tab){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    $('sec_'+tab).classList.add('active');
+  }
+
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.onclick = ()=> setActive(t.dataset.tab);
+  });
+
+  async function api(path, method='GET', body=null){
+    const opt = { method, headers: {'Content-Type':'application/json'} };
+    if(body) opt.body = JSON.stringify(body);
+    const r = await fetch(path, opt);
+    const j = await r.json().catch(()=>({ok:false,error:'bad_json'}));
+    if(!r.ok) throw j;
+    return j;
+  }
+
+  function getTelegramUser(){
+    // Telegram initData
+    const u = tg?.initDataUnsafe?.user;
+    if(u && u.id){
+      return { id: u.id, username: u.username || (u.first_name||"") };
+    }
+    // fallback (test in browser):
+    const qp = new URLSearchParams(location.search);
+    const id = Number(qp.get('user_id') || 0);
+    const un = qp.get('username') || '';
+    return { id, username: un };
+  }
+
+  function renderInv(){
+    const box = $('inv');
+    box.innerHTML = '';
+    if(!inventory.length){
+      box.innerHTML = `<div class="muted">Пока нет игроков. Открывай паки 🎁</div>`;
+      $('sellPlayer').innerHTML = '';
+      $('p2pPlayer').innerHTML = '';
+      return;
+    }
+    inventory.forEach(it=>{
+      const p = it.player;
+      const qty = it.qty;
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.style.background = 'rgba(255,255,255,.05)';
+      el.innerHTML = `
+        <div class="player">
+          <img src="${p.image_url || ''}" onerror="this.style.display='none'">
+          <div style="flex:1">
+            <b>${p.name}</b>
+            <div class="muted">${p.pos} • Rating ${p.rating} • x${qty}</div>
+          </div>
+        </div>`;
+      box.appendChild(el);
+    });
+
+    // dropdowns for selling/p2p: show only where qty>0
+    const opts = inventory.map(it=>`<option value="${it.player.id}">${it.player.name} (x${it.qty})</option>`).join('');
+    $('sellPlayer').innerHTML = opts;
+    $('p2pPlayer').innerHTML = opts;
+  }
+
+  function renderMarket(items){
+    const box = $('marketList');
+    box.innerHTML = '';
+    if(!items.length){
+      box.innerHTML = `<div class="muted">Нет активных лотов</div>`;
+      return;
+    }
+    items.forEach(it=>{
+      const p = it.player;
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.style.background = 'rgba(255,255,255,.05)';
+      el.innerHTML = `
+        <div class="player">
+          <img src="${p.image_url || ''}" onerror="this.style.display='none'">
+          <div style="flex:1">
+            <b>${p.name}</b>
+            <div class="muted">${p.pos} • Rating ${p.rating}</div>
+            <div class="row" style="margin-top:8px;justify-content:space-between">
+              <div class="badge">🪙 ${it.price}</div>
+              <button class="btn" data-buy="${it.id}">Купить</button>
+            </div>
+          </div>
+        </div>`;
+      box.appendChild(el);
+    });
+
+    box.querySelectorAll('button[data-buy]').forEach(b=>{
+      b.onclick = async ()=>{
+        try{
+          showToast('marketToast','Покупка...');
+          await api('/api/market/buy','POST',{user_id:userId, listing_id:Number(b.dataset.buy)});
+          showToast('marketToast','✅ Куплено!');
+          await refreshAll();
+          await loadMarket();
+        }catch(e){
+          showToast('marketToast','❌ '+(e.error||e.description||'ошибка'));
+        }
+      }
+    });
+  }
+
+  function renderP2P(items){
+    const box = $('p2pList');
+    box.innerHTML = '';
+    if(!items.length){
+      box.innerHTML = `<div class="muted">Пока нет сделок</div>`;
+      return;
+    }
+    items.forEach(t=>{
+      const p = t.player || {};
+      const isSeller = Number(t.seller_id) === userId;
+      const isBuyer = Number(t.buyer_id) === userId;
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.style.background = 'rgba(255,255,255,.05)';
+      el.innerHTML = `
+        <div class="player">
+          <img src="${p.image_url || ''}" onerror="this.style.display='none'">
+          <div style="flex:1">
+            <b>#${t.id} • ${p.name || ('Player '+t.player_id)}</b>
+            <div class="muted">Цена: ${t.price} 🪙 • fee: ${t.fee} • ${t.status}</div>
+            <div class="muted">seller: ${t.seller_id} • buyer: ${t.buyer_id}</div>
+            <div class="row" style="margin-top:8px">
+              ${t.status==='pending' && isBuyer ? `<button class="btn" data-acc="${t.id}">Принять</button>`:''}
+              ${t.status==='pending' && isSeller ? `<button class="btnDanger" data-cancel="${t.id}">Отменить</button>`:''}
+            </div>
+          </div>
+        </div>`;
+      box.appendChild(el);
+    });
+
+    box.querySelectorAll('button[data-acc]').forEach(b=>{
+      b.onclick = async ()=>{
+        try{
+          showToast('p2pToast','Принятие...');
+          await api('/api/p2p_player/accept','POST',{trade_id:Number(b.dataset.acc), user_id:userId});
+          showToast('p2pToast','✅ Сделка завершена');
+          await refreshAll();
+          await loadP2P();
+        }catch(e){
+          showToast('p2pToast','❌ '+(e.error||e.description||'ошибка'));
+        }
+      }
+    });
+    box.querySelectorAll('button[data-cancel]').forEach(b=>{
+      b.onclick = async ()=>{
+        try{
+          showToast('p2pToast','Отмена...');
+          await api('/api/p2p_player/cancel','POST',{trade_id:Number(b.dataset.cancel), user_id:userId});
+          showToast('p2pToast','✅ Отменено');
+          await refreshAll();
+          await loadP2P();
+        }catch(e){
+          showToast('p2pToast','❌ '+(e.error||e.description||'ошибка'));
+        }
+      }
+    });
+  }
+
+  function renderTx(items){
+    const box = $('txList');
+    box.innerHTML = '';
+    if(!items.length){
+      box.innerHTML = `<div class="muted">Пока пусто</div>`;
+      return;
+    }
+    items.forEach(x=>{
+      const dt = new Date((x.created_at||0)*1000);
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.style.background = 'rgba(255,255,255,.05)';
+      el.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <b>${x.kind}</b>
+          <div class="badge">${x.delta>0?'+':''}${x.delta}</div>
+        </div>
+        <div class="muted" style="margin-top:6px">${x.note||''}</div>
+        <div class="muted" style="margin-top:6px;font-size:12px">${dt.toLocaleString()}</div>`;
+      box.appendChild(el);
+    });
+  }
+
+  async function refreshAll(){
+    const j = await api(`/api/bootstrap?user_id=${encodeURIComponent(userId)}&username=${encodeURIComponent(username)}`);
+    $('coins').textContent = j.user.coins;
+    $('packs').textContent = j.user.pack_credits;
+    $('uid').textContent = j.user.user_id;
+    $('uname').textContent = j.user.username || username || 'Player';
+    $('levelLine').textContent = `Уровень: ${j.user.level} • XP: ${j.user.xp}/${j.user.need}`;
+
+    inventory = j.inventory || [];
+    renderInv();
+
+    if(j.user.vip){
+      $('vipBadge').style.display = 'inline-flex';
+    }else{
+      $('vipBadge').style.display = 'none';
+    }
+
+    // clubs dropdown
+    const clubs = j.clubs || [];
+    const sel = $('clubSelect');
+    if(!sel.dataset.loaded){
+      sel.innerHTML = clubs.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+      sel.dataset.loaded = "1";
+    }
+    if(j.user.club_id){
+      sel.value = String(j.user.club_id);
+      $('clubName').value = j.user.club_name || '';
+    }
+
+    // clear pack reveal
+    $('reveal').classList.remove('active');
+  }
+
+  async function loadMarket(){
+    try{
+      const j = await api('/api/market/list');
+      renderMarket(j.items||[]);
+    }catch(e){
+      showToast('marketToast','❌ ошибка загрузки маркета');
+    }
+  }
+
+  async function loadP2P(){
+    try{
+      const j = await api(`/api/p2p_player/list?user_id=${encodeURIComponent(userId)}`);
+      renderP2P(j.items||[]);
+    }catch(e){
+      showToast('p2pToast','❌ ошибка загрузки P2P');
+    }
+  }
+
+  async function loadTx(){
+    try{
+      const j = await api(`/api/tx?user_id=${encodeURIComponent(userId)}&limit=60`);
+      renderTx(j.items||[]);
+    }catch(e){
+      // ignore
+    }
+  }
+
+  // actions
+  $('refresh').onclick = async ()=>{ showToast('toast',''); await refreshAll(); };
+  $('daily').onclick = async ()=>{
+    try{
+      showToast('toast','Получаем награду...');
+      const j = await api('/api/daily/claim','POST',{user_id:userId});
+      showToast('toast',`✅ +${j.reward} монет`);
+      await refreshAll();
+    }catch(e){
+      if(e.error==='cooldown'){
+        const h = Math.ceil((e.left||0)/3600);
+        showToast('toast',`⏳ Подожди ~${h}ч`);
+      }else{
+        showToast('toast','❌ '+(e.error||'ошибка'));
+      }
+    }
+  };
+
+  $('match').onclick = async ()=>{
+    try{
+      showToast('toast','Матч...');
+      const j = await api('/api/match/play','POST',{user_id:userId});
+      showToast('toast',`${j.win?'🏆 Победа':'😅 Поражение'} • +${j.reward} монет`);
+      await refreshAll();
+    }catch(e){
+      showToast('toast','❌ '+(e.error||'ошибка'));
+    }
+  };
+
+  $('saveClub').onclick = async ()=>{
+    try{
+      showToast('clubToast','Сохраняю...');
+      await api('/api/set_club','POST',{
+        user_id:userId,
+        club_id:Number($('clubSelect').value),
+        club_name:$('clubName').value
+      });
+      showToast('clubToast','✅ Сохранено');
+      await refreshAll();
+    }catch(e){
+      showToast('clubToast','❌ '+(e.error||'ошибка'));
+    }
+  };
+
+  // Packs animation
+  async function openPack(){
+    try{
+      showToast('packToast','Открываем...');
+      $('packBox').classList.add('opening');
+      $('reveal').classList.remove('active');
+      await new Promise(r=>setTimeout(r, 900));
+
+      const j = await api('/api/open_pack','POST',{user_id:userId});
+
+      $('packBox').classList.remove('opening');
+      const p = j.player;
+      $('rp_name').textContent = p.name;
+      $('rp_pos').textContent = p.pos;
+      $('rp_rat').textContent = p.rating;
+      $('rp_img').src = p.image_url || '';
+      $('reveal').classList.add('active');
+      showToast('packToast','✅ Игрок получен!');
+      await refreshAll();
+    }catch(e){
+      $('packBox').classList.remove('opening');
+      showToast('packToast','❌ '+(e.error||'ошибка'));
+    }
+  }
+
+  $('packBox').onclick = openPack;
+  $('openPackBtn').onclick = openPack;
+
+  // Market sell
+  $('sellBtn').onclick = async ()=>{
+    try{
+      showToast('marketToast','Выставляю...');
+      await api('/api/market/sell','POST',{
+        user_id:userId,
+        player_id:Number($('sellPlayer').value),
+        price:Number($('sellPrice').value||0)
+      });
+      showToast('marketToast','✅ Лот создан');
+      await refreshAll();
+      await loadMarket();
+    }catch(e){
+      showToast('marketToast','❌ '+(e.error||'ошибка'));
+    }
+  };
+
+  $('loadMarket').onclick = loadMarket;
+
+  // P2P create
+  $('p2pCreate').onclick = async ()=>{
+    try{
+      showToast('p2pToast','Создаю сделку...');
+      const buyer = Number(($('p2pBuyer').value||'').trim());
+      if(!buyer) { showToast('p2pToast','❌ Введи buyer ID'); return; }
+
+      const j = await api('/api/p2p_player/create','POST',{
+        seller_id:userId,
+        buyer_id:buyer,
+        player_id:Number($('p2pPlayer').value),
+        price:Number($('p2pPrice').value||0)
+      });
+      showToast('p2pToast',`✅ Сделка #${j.trade_id} создана (fee ${j.fee})`);
+      await refreshAll();
+      await loadP2P();
+    }catch(e){
+      showToast('p2pToast','❌ '+(e.error||'ошибка'));
+    }
+  };
+  $('loadP2P').onclick = loadP2P;
+
+  // Shop Stars
+  async function buy(product){
+    try{
+      showToast('shopToast','Создаю ссылку оплаты...');
+      const j = await api('/api/create_invoice','POST',{user_id:userId, product});
+      showToast('shopToast','✅ Открываю оплату...');
+      if(tg && tg.openInvoice){
+        tg.openInvoice(j.url);
+      }else{
+        // fallback
+        window.open(j.url, '_blank');
+      }
+    }catch(e){
+      showToast('shopToast','❌ '+(e.error||e.description||'ошибка'));
+    }
+  }
+  window.buy = buy;
+
+  $('loadTx').onclick = loadTx;
+
+  // init
+  (async ()=>{
+    const u = getTelegramUser();
+    userId = u.id;
+    username = u.username || "";
+
+    if(!userId){
+      alert("Открой через Telegram. Или открой так: /web/index.html?user_id=123&username=test");
+      return;
+    }
+    await refreshAll();
+    await loadMarket();
+    await loadP2P();
+    await loadTx();
+  })();
+</script>
 </body>
 </html>
