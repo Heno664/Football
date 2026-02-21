@@ -20,7 +20,10 @@ conn.execute(
  coins INTEGER DEFAULT 1000,
  last_daily INTEGER DEFAULT 0,
  club_real TEXT,
- club_custom TEXT
+ club_custom TEXT,
+ wins INTEGER DEFAULT 0,
+ losses INTEGER DEFAULT 0,
+ rating INTEGER DEFAULT 1000
 )"""
 )
 conn.execute(
@@ -45,6 +48,18 @@ conn.execute(
 )"""
 )
 conn.commit()
+
+
+def ensure_column(table: str, column: str, definition: str):
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        conn.commit()
+
+
+ensure_column("users", "wins", "INTEGER DEFAULT 0")
+ensure_column("users", "losses", "INTEGER DEFAULT 0")
+ensure_column("users", "rating", "INTEGER DEFAULT 1000")
 
 with open("players.json", encoding="utf-8") as f:
     PLAYERS = json.load(f)
@@ -77,6 +92,13 @@ def tg_send_message(chat_id: int, text: str, reply_markup=None):
     if reply_markup:
         payload["reply_markup"] = reply_markup
     requests.post(url, json=payload, timeout=10)
+
+
+def calc_team_power(user_id: int):
+    team = db_fetchall("SELECT attack, defense, speed FROM players WHERE user_id=?", (user_id,))
+    if not team:
+        return 0
+    return sum(sum(p) for p in team) // len(team)
 
 
 @app.route("/", methods=["GET"])
@@ -114,9 +136,20 @@ def profile():
         return json_error("Не указан user_id")
     ensure_user(user)
 
-    row = db_fetchone("SELECT coins, last_daily FROM users WHERE id=?", (user,))
+    row = db_fetchone("SELECT coins, last_daily, wins, losses, rating FROM users WHERE id=?", (user,))
     cards_count = db_fetchone("SELECT COUNT(*) FROM players WHERE user_id=?", (user,))[0]
-    return {"ok": True, "profile": {"coins": row[0], "last_daily": row[1], "cards_count": cards_count}}
+    return {
+        "ok": True,
+        "profile": {
+            "coins": row[0],
+            "last_daily": row[1],
+            "cards_count": cards_count,
+            "wins": row[2] or 0,
+            "losses": row[3] or 0,
+            "rating": row[4] or 1000,
+            "team_power": calc_team_power(user),
+        },
+    }
 
 
 @app.route("/my_players")
@@ -156,7 +189,7 @@ def daily():
     now = int(time.time())
     last = db_fetchone("SELECT last_daily FROM users WHERE id=?", (user,))[0]
     if now - last < 86400:
-        return {"ok": False, "message": "Уже получал сегодня"}
+        return {"ok": False, "message": "Уже получал сегодня", "remaining": 86400 - (now - last)}
 
     reward = random.randint(200, 500)
     conn.execute("UPDATE users SET coins=coins+?, last_daily=? WHERE id=?", (reward, now, user))
@@ -175,7 +208,12 @@ def open_pack():
     if coins < 300:
         return json_error("Недостаточно монет")
 
-    p = random.choice(PLAYERS)
+    rarity_weights = {"common": 50, "rare": 30, "epic": 15, "legendary": 5}
+    weighted = []
+    for p in PLAYERS:
+        weighted.extend([p] * rarity_weights.get(p.get("rarity", "common"), 10))
+
+    p = random.choice(weighted)
     conn.execute("UPDATE users SET coins=coins-300 WHERE id=?", (user,))
     conn.execute(
         "INSERT INTO players (user_id,name,position,attack,defense,speed,rarity,image) VALUES (?,?,?,?,?,?,?,?)",
@@ -192,18 +230,23 @@ def match():
         return json_error("Не указан user_id")
     ensure_user(user)
 
-    team = db_fetchall("SELECT attack,defense,speed FROM players WHERE user_id=?", (user,))
-    if not team:
+    power = calc_team_power(user)
+    if not power:
         return json_error("Нет игроков")
 
-    power = sum(sum(p) for p in team) // len(team)
-    enemy = random.randint(150, 300)
-    if power > enemy:
-        reward = random.randint(200, 400)
-        conn.execute("UPDATE users SET coins=coins+? WHERE id=?", (reward, user))
+    enemy = random.randint(140, 340)
+    variance = random.randint(-25, 25)
+    final_power = power + variance
+
+    if final_power > enemy:
+        reward = random.randint(220, 450)
+        conn.execute("UPDATE users SET coins=coins+?, wins=wins+1, rating=rating+12 WHERE id=?", (reward, user))
         conn.commit()
-        return {"ok": True, "result": "win", "reward": reward, "your": power, "enemy": enemy}
-    return {"ok": True, "result": "lose", "your": power, "enemy": enemy}
+        return {"ok": True, "result": "win", "reward": reward, "your": final_power, "enemy": enemy}
+
+    conn.execute("UPDATE users SET losses=losses+1, rating=MAX(500, rating-8) WHERE id=?", (user,))
+    conn.commit()
+    return {"ok": True, "result": "lose", "your": final_power, "enemy": enemy}
 
 
 @app.route("/market")
@@ -211,7 +254,8 @@ def market():
     rows = db_fetchall(
         """SELECT market.id, players.name, players.position, players.attack,
                   players.defense, players.speed, players.rarity, players.image, market.price
-           FROM market JOIN players ON market.player_id = players.id"""
+           FROM market JOIN players ON market.player_id = players.id
+           ORDER BY market.id DESC"""
     )
     return {
         "ok": True,
@@ -230,6 +274,32 @@ def market():
             for row in rows
         ],
     }
+
+
+@app.route("/sell_player", methods=["POST"])
+def sell_player():
+    data = request.json or {}
+    user = data.get("user_id")
+    player_id = data.get("player_id")
+    price = data.get("price")
+
+    if not user or not player_id or not price:
+        return json_error("Некорректные параметры")
+    if int(price) < 100:
+        return json_error("Минимальная цена 100")
+
+    ensure_user(user)
+    player = db_fetchone("SELECT id FROM players WHERE id=? AND user_id=?", (player_id, user))
+    if not player:
+        return json_error("Игрок не найден")
+
+    exists = db_fetchone("SELECT id FROM market WHERE player_id=?", (player_id,))
+    if exists:
+        return json_error("Этот игрок уже на рынке")
+
+    conn.execute("INSERT INTO market (seller_id, player_id, price) VALUES (?, ?, ?)", (user, player_id, int(price)))
+    conn.commit()
+    return {"ok": True, "message": "Игрок выставлен на рынок"}
 
 
 @app.route("/buy_player", methods=["POST"])
@@ -266,6 +336,20 @@ def buy_player():
         return json_error("Не удалось выполнить покупку", 500)
 
     return {"ok": True, "message": "Игрок куплен"}
+
+
+@app.route("/leaderboard")
+def leaderboard():
+    rows = db_fetchall(
+        "SELECT id, rating, wins, losses, coins FROM users ORDER BY rating DESC, wins DESC LIMIT 20"
+    )
+    return {
+        "ok": True,
+        "leaders": [
+            {"user_id": r[0], "rating": r[1] or 1000, "wins": r[2] or 0, "losses": r[3] or 0, "coins": r[4] or 0}
+            for r in rows
+        ],
+    }
 
 
 @app.route("/clubs")

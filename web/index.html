@@ -9,21 +9,29 @@
 </head>
 <body>
     <div class="container">
-        <header class="app-header">
-            <h1>⚽ Football Stars</h1>
+        <header class="app-header panel">
+            <div>
+                <h1>⚽ Football Stars</h1>
+                <p class="muted">Собери команду мечты, побеждай и торгуй игроками</p>
+            </div>
             <div class="stats">
                 <span class="chip">💰 <b id="coins">0</b></span>
                 <span class="chip">🃏 <b id="cards-count">0</b></span>
+                <span class="chip">⚡ <b id="team-power">0</b></span>
+                <span class="chip">🏆 <b id="rating">1000</b></span>
             </div>
         </header>
 
         <section class="panel actions">
-            <h2>Действия</h2>
+            <div class="section-title">
+                <h2>Быстрые действия</h2>
+                <span id="daily-timer" class="muted">Daily: готов</span>
+            </div>
             <div class="buttons">
                 <button class="primary" onclick="daily()">🎁 Daily Reward</button>
-                <button class="primary" onclick="openPack()">🎴 Open Pack (300)</button>
-                <button onclick="playMatch()">⚔️ Play Match</button>
-                <button onclick="loadMarket()">🛒 Обновить Market</button>
+                <button class="primary" onclick="openPack()">🎴 Открыть пак (300)</button>
+                <button onclick="playMatch()">⚔️ Играть матч</button>
+                <button onclick="loadLeaderboard()">🥇 Рейтинг</button>
                 <button onclick="buyCoins(100)">💰 +100 Coins</button>
                 <button onclick="buyCoins(500)">💰 +500 Coins</button>
                 <button onclick="buyCoins(1000)">💰 +1000 Coins</button>
@@ -32,18 +40,29 @@
 
         <section class="panel">
             <div class="section-title">
-                <h2>Мои карты</h2>
-                <button class="small" onclick="loadMyPlayers()">Обновить</button>
+                <h2>Моя команда</h2>
+                <div class="inline-actions">
+                    <input id="search-my" placeholder="Поиск игрока..." oninput="loadMyPlayers()">
+                    <button class="small" onclick="loadMyPlayers()">Обновить</button>
+                </div>
             </div>
             <div id="card-area" class="cards-grid"></div>
         </section>
 
         <section class="panel">
             <div class="section-title">
-                <h2>Market</h2>
+                <h2>Трансферный рынок</h2>
                 <button class="small" onclick="loadMarket()">Обновить</button>
             </div>
             <div id="market-area" class="cards-grid"></div>
+        </section>
+
+        <section class="panel">
+            <div class="section-title">
+                <h2>Топ игроков (rating)</h2>
+                <button class="small" onclick="loadLeaderboard()">Обновить</button>
+            </div>
+            <div id="leaderboard" class="leaderboard"></div>
         </section>
     </div>
 
@@ -51,4 +70,4 @@
 
     <script src="/web/script.js"></script>
 </body>
-</html></html>
+</html>
