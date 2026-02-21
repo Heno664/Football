@@ -11,7 +11,7 @@
   {"name":"Sadio Mane","position":"LW","attack":88,"defense":50,"speed":90,"rarity":"epic","image":"sadio_mane.png"},
   {"name":"Luka Modric","position":"CM","attack":85,"defense":75,"speed":75,"rarity":"rare","image":"luka_modric.png"},
   {"name":"Sergio Ramos","position":"CB","attack":70,"defense":89,"speed":72,"rarity":"rare","image":"sergio_ramos.png"},
-  {"name":"Paul Pogba","position":"CM","attack":84,"defense":74,"speed":74,"rarity":"rare","image":"paul_pogba.png"},
+  {"name":"Paul Pogba","position":"CM","attack":84,"defense":74,"speed":74,"rarity":"rare","image":"https://imgbin.com/png/9bwgjxcM/paul-pogba-fifa-18-fifa-16-manchester-united-f-c-france-national-football-team-png"},
   {"name":"Trent Alexander‑Arnold","position":"RB","attack":80,"defense":82,"speed":81,"rarity":"rare","image":"trent_alexander_arnold.png"},
   {"name":"Joshua Kimmich","position":"CDM","attack":82,"defense":85,"speed":73,"rarity":"rare","image":"joshua_kimmich.png"},
   {"name":"Harry Kane","position":"ST","attack":90,"defense":50,"speed":75,"rarity":"rare","image":"harry_kane.png"},
@@ -43,3 +43,4 @@
   {"name":"Kalidou Koulibaly","position":"CB","attack":66,"defense":88,"speed":75,"rarity":"common","image":"kalidou_koulibaly.png"},
   {"name":"David de Gea","position":"GK","attack":12,"defense":88,"speed":45,"rarity":"common","image":"david_de_gea.png"}
 ]
+
