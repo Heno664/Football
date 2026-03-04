@@ -135,6 +135,38 @@ def init_db():
     """)
 
     conn.commit()
+
+    # Backward-compatible migration for old schema where users PK was `id`.
+    cur.execute("PRAGMA table_info(users)")
+    users_cols = [r[1] for r in cur.fetchall()]
+    if users_cols and "user_id" not in users_cols and "id" in users_cols:
+        cur.execute("ALTER TABLE users RENAME TO users_old")
+        cur.execute("""
+        CREATE TABLE users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            club_id INTEGER DEFAULT 0,
+            club_name TEXT DEFAULT '',
+            coins INTEGER NOT NULL DEFAULT 0,
+            last_daily INTEGER NOT NULL DEFAULT 0,
+            pack_credits INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER DEFAULT (strftime('%s','now'))
+        )
+        """)
+        cur.execute("""
+        INSERT INTO users (user_id, username, club_id, club_name, coins, last_daily, pack_credits)
+        SELECT
+            id,
+            '',
+            0,
+            COALESCE(club_custom, ''),
+            COALESCE(coins, 0),
+            COALESCE(last_daily, 0),
+            COALESCE(pack_credits, 0)
+        FROM users_old
+        """)
+        cur.execute("DROP TABLE users_old")
+
     conn.close()
 
 init_db()

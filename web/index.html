@@ -36,7 +36,7 @@
     .section{display:none}
     .section.active{display:block}
     .list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-    @media (max-width:860px){.grid{grid-template-columns:1fr}.list{grid-template-columns:1fr}}
+    @media (max-width:860px){.grid{grid-template-columns:1fr}.list{grid-template-columns:1fr}.toolbar,.three{grid-template-columns:1fr}}
     .player{display:flex;gap:10px;align-items:center}
     .player img{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#0f1730;border:1px solid rgba(255,255,255,.08)}
     .player b{display:block}
@@ -68,6 +68,13 @@
       border-radius:14px;padding:12px 12px;outline:none;width:100%}
     label{font-size:13px;color:var(--muted);display:block;margin:8px 0 6px}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .toolbar{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin:10px 0}
+    .card.soft{background:rgba(255,255,255,.04)}
+    .tag{font-size:12px;opacity:.9;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+    .player img{box-shadow:0 8px 18px rgba(0,0,0,.35)}
+    .pulse{animation:pulse 1.5s ease-in-out infinite}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
   </style>
 </head>
 <body>
@@ -121,6 +128,22 @@
     <!-- Sections -->
     <div class="card section active" id="sec_home" style="margin-top:12px">
       <div class="muted">Коллекция</div>
+      <div class="toolbar">
+        <input id="invSearch" placeholder="Поиск по имени или позиции" />
+        <select id="invSort">
+          <option value="rating_desc">Сильные сначала</option>
+          <option value="rating_asc">Слабые сначала</option>
+          <option value="qty_desc">Больше копий</option>
+          <option value="name_asc">По имени</option>
+        </select>
+        <select id="invPosFilter">
+          <option value="">Все позиции</option>
+          <option value="GK">GK</option>
+          <option value="DF">DF</option>
+          <option value="MF">MF</option>
+          <option value="FW">FW</option>
+        </select>
+      </div>
       <div class="list" id="inv"></div>
       <div class="toast" id="invToast"></div>
     </div>
@@ -136,7 +159,11 @@
 
       <div class="packStage">
         <div class="pack" id="packBox">PACK</div>
-        <button class="btn2" id="openPackBtn">Открыть 1 пак</button>
+        <div class="three" style="width:100%">
+          <button class="btn2" id="openPackBtn">Открыть 1 пак</button>
+          <button class="btnGhost" id="openFiveBtn">Открыть x5</button>
+          <button class="btnGhost" id="matchStreakBtn">Серия матчей x3</button>
+        </div>
         <div class="toast" id="packToast"></div>
 
         <div class="reveal" id="reveal">
@@ -181,6 +208,11 @@
 
       <div class="line"></div>
       <div class="muted">Лоты</div>
+      <div class="toolbar">
+        <input id="marketSearch" placeholder="Поиск игрока" />
+        <input id="marketMaxPrice" type="number" min="1" placeholder="Цена до" />
+        <button class="btnGhost" id="clearMarketFilters">Сбросить фильтр</button>
+      </div>
       <div class="list" id="marketList"></div>
     </div>
 
@@ -267,6 +299,8 @@
   let userId = 0;
   let username = "";
   let inventory = [];
+  let marketItems = [];
+  let actionBusy = false;
 
   function showToast(id, text){
     $(id).textContent = text || "";
@@ -309,24 +343,44 @@
   function renderInv(){
     const box = $('inv');
     box.innerHTML = '';
-    if(!inventory.length){
+    const q = ($('invSearch').value || '').trim().toLowerCase();
+    const posFilter = $('invPosFilter').value;
+    const sort = $('invSort').value;
+
+    let view = [...inventory];
+    if(q){
+      view = view.filter(it => `${it.player.name} ${it.player.pos}`.toLowerCase().includes(q));
+    }
+    if(posFilter){
+      view = view.filter(it => String(it.player.pos || '').toUpperCase() === posFilter);
+    }
+    view.sort((a,b)=>{
+      if(sort === 'rating_asc') return (a.player.rating||0) - (b.player.rating||0);
+      if(sort === 'qty_desc') return (b.qty||0) - (a.qty||0);
+      if(sort === 'name_asc') return String(a.player.name||'').localeCompare(String(b.player.name||''));
+      return (b.player.rating||0) - (a.player.rating||0);
+    });
+
+    if(!view.length){
       box.innerHTML = `<div class="muted">Пока нет игроков. Открывай паки 🎁</div>`;
-      $('sellPlayer').innerHTML = '';
-      $('p2pPlayer').innerHTML = '';
+      if(!inventory.length){
+        $('sellPlayer').innerHTML = '';
+        $('p2pPlayer').innerHTML = '';
+      }
       return;
     }
-    inventory.forEach(it=>{
+    view.forEach(it=>{
       const p = it.player;
       const qty = it.qty;
       const el = document.createElement('div');
-      el.className = 'card';
-      el.style.background = 'rgba(255,255,255,.05)';
+      el.className = 'card soft';
       el.innerHTML = `
         <div class="player">
           <img src="${p.image_url || ''}" onerror="this.style.display='none'">
           <div style="flex:1">
             <b>${p.name}</b>
-            <div class="muted">${p.pos} • Rating ${p.rating} • x${qty}</div>
+            <div class="muted">${p.pos} • Rating ${p.rating}</div>
+            <div class="row" style="margin-top:6px"><span class="tag">x${qty}</span><span class="tag">ID ${p.id}</span></div>
           </div>
         </div>`;
       box.appendChild(el);
@@ -339,17 +393,28 @@
   }
 
   function renderMarket(items){
+    marketItems = items;
     const box = $('marketList');
     box.innerHTML = '';
-    if(!items.length){
+    const q = ($('marketSearch').value || '').trim().toLowerCase();
+    const maxPrice = Number($('marketMaxPrice').value || 0);
+
+    let view = [...items];
+    if(q){
+      view = view.filter(it => String(it.player?.name || '').toLowerCase().includes(q));
+    }
+    if(maxPrice > 0){
+      view = view.filter(it => Number(it.price || 0) <= maxPrice);
+    }
+
+    if(!view.length){
       box.innerHTML = `<div class="muted">Нет активных лотов</div>`;
       return;
     }
-    items.forEach(it=>{
+    view.forEach(it=>{
       const p = it.player;
       const el = document.createElement('div');
-      el.className = 'card';
-      el.style.background = 'rgba(255,255,255,.05)';
+      el.className = 'card soft';
       el.innerHTML = `
         <div class="player">
           <img src="${p.image_url || ''}" onerror="this.style.display='none'">
@@ -567,15 +632,17 @@
 
   // Packs animation
   async function openPack(){
+    if(actionBusy) return;
     try{
+      actionBusy = true;
       showToast('packToast','Открываем...');
-      $('packBox').classList.add('opening');
+      $('packBox').classList.add('opening','pulse');
       $('reveal').classList.remove('active');
       await new Promise(r=>setTimeout(r, 900));
 
       const j = await api('/api/open_pack','POST',{user_id:userId});
 
-      $('packBox').classList.remove('opening');
+      $('packBox').classList.remove('opening','pulse');
       const p = j.player;
       $('rp_name').textContent = p.name;
       $('rp_pos').textContent = p.pos;
@@ -585,13 +652,68 @@
       showToast('packToast','✅ Игрок получен!');
       await refreshAll();
     }catch(e){
-      $('packBox').classList.remove('opening');
+      $('packBox').classList.remove('opening','pulse');
       showToast('packToast','❌ '+(e.error||'ошибка'));
+    }finally{
+      actionBusy = false;
+    }
+  }
+
+  async function openManyPacks(count = 5){
+    if(actionBusy) return;
+    actionBusy = true;
+    $('packBox').classList.add('opening','pulse');
+    let opened = 0;
+    let lastPlayer = null;
+    try{
+      for(let i=0;i<count;i++){
+        const j = await api('/api/open_pack','POST',{user_id:userId});
+        opened += 1;
+        lastPlayer = j.player;
+      }
+      if(lastPlayer){
+        $('rp_name').textContent = lastPlayer.name;
+        $('rp_pos').textContent = lastPlayer.pos;
+        $('rp_rat').textContent = lastPlayer.rating;
+        $('rp_img').src = lastPlayer.image_url || '';
+        $('reveal').classList.add('active');
+      }
+      showToast('packToast',`✅ Открыто ${opened} паков подряд`);
+      await refreshAll();
+    }catch(e){
+      showToast('packToast',`⚠️ Остановлено: ${opened}/${count} (${e.error||'ошибка'})`);
+      await refreshAll();
+    }finally{
+      actionBusy = false;
+      $('packBox').classList.remove('opening','pulse');
+    }
+  }
+
+  async function playMatchStreak(times = 3){
+    if(actionBusy) return;
+    actionBusy = true;
+    let wins = 0;
+    let reward = 0;
+    try{
+      for(let i=0;i<times;i++){
+        const j = await api('/api/match/play','POST',{user_id:userId});
+        if(j.win) wins += 1;
+        reward += Number(j.reward || 0);
+      }
+      showToast('toast',`🔥 Серия: ${wins}/${times} побед, +${reward} монет`);
+      await refreshAll();
+      await loadTx();
+    }catch(e){
+      showToast('toast','❌ '+(e.error||'ошибка серии'));
+    }finally{
+      actionBusy = false;
     }
   }
 
   $('packBox').onclick = openPack;
   $('openPackBtn').onclick = openPack;
+  $('openFiveBtn').onclick = ()=>openManyPacks(5);
+  $('matchStreakBtn').onclick = ()=>playMatchStreak(3);
 
   // Market sell
   $('sellBtn').onclick = async ()=>{
@@ -611,6 +733,11 @@
   };
 
   $('loadMarket').onclick = loadMarket;
+  $('clearMarketFilters').onclick = ()=>{
+    $('marketSearch').value = '';
+    $('marketMaxPrice').value = '';
+    renderMarket(marketItems);
+  };
 
   // P2P create
   $('p2pCreate').onclick = async ()=>{
@@ -653,6 +780,11 @@
   window.buy = buy;
 
   $('loadTx').onclick = loadTx;
+  $('invSearch').oninput = renderInv;
+  $('invSort').onchange = renderInv;
+  $('invPosFilter').onchange = renderInv;
+  $('marketSearch').oninput = ()=>renderMarket(marketItems);
+  $('marketMaxPrice').oninput = ()=>renderMarket(marketItems);
 
   // init
   (async ()=>{
