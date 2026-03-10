@@ -11,11 +11,31 @@ from flask import Flask, request, jsonify, send_from_directory
 # =========================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "")  # e.g. https://your-app.up.railway.app/web/index.html
+PROVIDER_TOKEN = os.environ.get("PROVIDER_TOKEN", "")
 P2P_PLAYER_FEE_PCT = 3  # buyer fee %
 DAILY_COINS = 200
 VIP_REWARD_BONUS = 1.10  # +10% rewards
 
 app = Flask(__name__, static_folder="web", static_url_path="/web")
+
+
+def as_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+@app.errorhandler(404)
+def not_found(_):
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": False, "error": "not_found", "path": request.path}), 404
+
+
+@app.errorhandler(Exception)
+def handle_exception(exc):
+    return jsonify({"ok": False, "error": "server_error", "detail": str(exc)}), 500
 
 # =========================
 # Data load
@@ -141,6 +161,9 @@ def init_db():
     users_cols = [r[1] for r in cur.fetchall()]
     if users_cols and "user_id" not in users_cols and "id" in users_cols:
         cur.execute("ALTER TABLE users RENAME TO users_old")
+        cur.execute("PRAGMA table_info(users_old)")
+        old_cols = [r[1] for r in cur.fetchall()]
+        pack_col = "COALESCE(pack_credits, 0)" if "pack_credits" in old_cols else "0"
         cur.execute("""
         CREATE TABLE users (
             user_id INTEGER PRIMARY KEY,
@@ -153,7 +176,7 @@ def init_db():
             created_at INTEGER DEFAULT (strftime('%s','now'))
         )
         """)
-        cur.execute("""
+        cur.execute(f"""
         INSERT INTO users (user_id, username, club_id, club_name, coins, last_daily, pack_credits)
         SELECT
             id,
@@ -162,7 +185,7 @@ def init_db():
             COALESCE(club_custom, ''),
             COALESCE(coins, 0),
             COALESCE(last_daily, 0),
-            COALESCE(pack_credits, 0)
+            {pack_col}
         FROM users_old
         """)
         cur.execute("DROP TABLE users_old")
@@ -401,6 +424,11 @@ def root():
     # helpful default
     return jsonify({"ok": True, "web": "/web/index.html", "webhook": "/webhook"})
 
+
+@app.get("/game")
+def game():
+    return send_from_directory("web", "index.html")
+
 @app.get("/web/index.html")
 def web_index():
     return send_from_directory("web", "index.html")
@@ -409,37 +437,11 @@ def web_index():
 def webhook():
     upd = request.get_json(silent=True) or {}
 
-    # 1) messages
-    msg = upd.get("message") or upd.get("edited_message")
-    if msg:
-        chat_id = msg["chat"]["id"]
-        from_user = msg.get("from", {})
-        user_id = int(from_user.get("id", 0))
-        username = from_user.get("username") or (from_user.get("first_name", "") + " " + from_user.get("last_name", "")).strip()
-
-        if user_id:
-            ensure_user(user_id, username)
-
-        text = (msg.get("text") or "").strip().lower()
-        if text == "/start":
-            if not WEBAPP_URL:
-                tg_send_message(chat_id, "⚠️ WEBAPP_URL не задан в Railway Variables.\nНужно: https://.../web/index.html")
-            else:
-                keyboard = {
-                    "inline_keyboard": [[{
-                        "text": "Играть ⚽",
-                        "web_app": {"url": WEBAPP_URL}
-                    }]]
-                }
-                tg_send_message(chat_id, "Привет! Нажми «Играть» чтобы открыть игру 👇", keyboard)
-
-        return jsonify({"ok": True})
-
-    # 2) successful payment (Stars)
+    # successful payment (Stars)
     sp = upd.get("message", {}).get("successful_payment")
     if sp:
         from_user = upd["message"].get("from", {})
-        user_id = int(from_user.get("id", 0))
+        user_id = as_int(from_user.get("id"), 0)
         ensure_user(user_id, from_user.get("username") or "")
 
         tg_charge_id = sp.get("telegram_payment_charge_id", "")
@@ -465,13 +467,13 @@ def webhook():
         else:
             grant = item["grant"]
             if "coins" in grant:
-                add_coins(user_id, int(grant["coins"]), kind="stars_buy", note=product)
+                add_coins(user_id, as_int(grant["coins"], 0), kind="stars_buy", note=product)
                 lines.append(f"✅ Начислено монет: {grant['coins']}")
             if "packs" in grant:
-                add_packs(user_id, int(grant["packs"]), note=product)
+                add_packs(user_id, as_int(grant["packs"], 0), note=product)
                 lines.append(f"✅ Паков добавлено: {grant['packs']}")
             if "vip_days" in grant:
-                days = int(grant["vip_days"])
+                days = as_int(grant["vip_days"], 0)
                 add_seconds = days * 86400
                 now = int(time.time())
                 conn2 = db()
@@ -479,7 +481,7 @@ def webhook():
                 cur2.execute("INSERT OR IGNORE INTO vip(user_id, vip_until) VALUES(?,0)", (user_id,))
                 conn2.commit()
                 cur2.execute("SELECT vip_until FROM vip WHERE user_id=?", (user_id,))
-                cur_until = int(cur2.fetchone()["vip_until"])
+                cur_until = as_int(cur2.fetchone()["vip_until"], 0)
                 new_until = max(cur_until, now) + add_seconds
                 cur2.execute("UPDATE vip SET vip_until=? WHERE user_id=?", (new_until, user_id))
                 conn2.commit()
@@ -488,6 +490,32 @@ def webhook():
                 log_tx(user_id, "vip", 0, f"VIP until {new_until}")
 
         tg_send_message(upd["message"]["chat"]["id"], "\n".join(lines) if lines else "Оплата получена ✅")
+        return jsonify({"ok": True})
+
+    # 1) messages
+    msg = upd.get("message") or upd.get("edited_message")
+    if msg:
+        chat_id = msg["chat"]["id"]
+        from_user = msg.get("from", {})
+        user_id = as_int(from_user.get("id"), 0)
+        username = from_user.get("username") or (from_user.get("first_name", "") + " " + from_user.get("last_name", "")).strip()
+
+        if user_id:
+            ensure_user(user_id, username)
+
+        text = (msg.get("text") or "").strip().lower()
+        if text == "/start":
+            if not WEBAPP_URL:
+                tg_send_message(chat_id, "⚠️ WEBAPP_URL не задан в Railway Variables.\nНужно: https://.../web/index.html")
+            else:
+                keyboard = {
+                    "inline_keyboard": [[{
+                        "text": "Играть ⚽",
+                        "web_app": {"url": WEBAPP_URL}
+                    }]]
+                }
+                tg_send_message(chat_id, "Привет! Нажми «Играть» чтобы открыть игру 👇", keyboard)
+
         return jsonify({"ok": True})
 
     return jsonify({"ok": True})
@@ -550,8 +578,8 @@ def api_clubs():
 @app.post("/api/set_club")
 def api_set_club():
     data = request.get_json(silent=True) or {}
-    user_id = int(data.get("user_id", 0))
-    club_id = int(data.get("club_id", 0))
+    user_id = as_int(data.get("user_id"), 0)
+    club_id = as_int(data.get("club_id"), 0)
     club_name = (data.get("club_name") or "").strip()[:20]
 
     if not user_id or club_id <= 0:
@@ -574,7 +602,7 @@ def api_set_club():
 @app.post("/api/daily/claim")
 def api_daily_claim():
     data = request.get_json(silent=True) or {}
-    user_id = int(data.get("user_id", 0))
+    user_id = as_int(data.get("user_id"), 0)
     if not user_id:
         return jsonify({"ok": False, "error": "user_id required"}), 400
 
@@ -625,7 +653,7 @@ def random_player():
 @app.post("/api/open_pack")
 def api_open_pack():
     data = request.get_json(silent=True) or {}
-    user_id = int(data.get("user_id", 0))
+    user_id = as_int(data.get("user_id"), 0)
     if not user_id:
         return jsonify({"ok": False, "error": "user_id required"}), 400
     ensure_user(user_id)
@@ -637,7 +665,7 @@ def api_open_pack():
     if not p:
         return jsonify({"ok": False, "error": "no_players_data"}), 500
 
-    pid = int(p["id"])
+    pid = as_int(p.get("id"), 0)
     add_player(user_id, pid, 1)
     add_xp(user_id, 15, "Opened pack")
     return jsonify({"ok": True, "player": p})
@@ -669,9 +697,9 @@ def api_market_list():
 @app.post("/api/market/sell")
 def api_market_sell():
     data = request.get_json(silent=True) or {}
-    user_id = int(data.get("user_id", 0))
-    player_id = int(data.get("player_id", 0))
-    price = int(data.get("price", 0))
+    user_id = as_int(data.get("user_id"), 0)
+    player_id = as_int(data.get("player_id"), 0)
+    price = as_int(data.get("price"), 0)
 
     if not user_id or player_id <= 0 or price <= 0:
         return jsonify({"ok": False, "error": "bad_params"}), 400
@@ -699,8 +727,8 @@ def api_market_sell():
 @app.post("/api/market/buy")
 def api_market_buy():
     data = request.get_json(silent=True) or {}
-    buyer_id = int(data.get("user_id", 0))
-    listing_id = int(data.get("listing_id", 0))
+    buyer_id = as_int(data.get("user_id"), 0)
+    listing_id = as_int(data.get("listing_id"), 0)
     if not buyer_id or not listing_id:
         return jsonify({"ok": False, "error": "bad_params"}), 400
 
@@ -733,7 +761,12 @@ def api_market_buy():
 
     conn = db()
     cur = conn.cursor()
-    cur.execute("UPDATE market_listings SET status='sold', sold_at=strftime('%s','now') WHERE id=?", (listing_id,))
+    cur.execute("UPDATE market_listings SET status='sold', sold_at=strftime('%s','now') WHERE id=? AND status='active'", (listing_id,))
+    if cur.rowcount == 0:
+        conn.rollback()
+        conn.close()
+        add_coins(buyer_id, price, kind="market_refund", note=f"Listing {listing_id} race condition")
+        return jsonify({"ok": False, "error": "not_active"}), 400
     conn.commit()
     conn.close()
 
@@ -746,7 +779,7 @@ def api_market_buy():
 @app.post("/api/match/play")
 def api_match_play():
     data = request.get_json(silent=True) or {}
-    user_id = int(data.get("user_id", 0))
+    user_id = as_int(data.get("user_id"), 0)
     if not user_id:
         return jsonify({"ok": False, "error": "user_id required"}), 400
     ensure_user(user_id)
@@ -771,7 +804,7 @@ def api_match_play():
 @app.post("/api/create_invoice")
 def api_create_invoice():
     data = request.get_json(silent=True) or {}
-    user_id = int(data.get("user_id", 0))
+    user_id = as_int(data.get("user_id"), 0)
     product = (data.get("product") or "").strip()
     if not user_id or not product:
         return jsonify({"ok": False, "error": "bad_params"}), 400
@@ -805,10 +838,10 @@ def api_create_invoice():
 @app.post("/api/p2p_player/create")
 def api_p2p_player_create():
     data = request.get_json(silent=True) or {}
-    seller_id = int(data.get("seller_id", 0))
-    buyer_id = int(data.get("buyer_id", 0))
-    player_id = int(data.get("player_id", 0))
-    price = int(data.get("price", 0))
+    seller_id = as_int(data.get("seller_id"), 0)
+    buyer_id = as_int(data.get("buyer_id"), 0)
+    player_id = as_int(data.get("player_id"), 0)
+    price = as_int(data.get("price"), 0)
 
     if not seller_id or not buyer_id or seller_id == buyer_id:
         return jsonify({"ok": False, "error": "bad_users"}), 400
@@ -842,8 +875,8 @@ def api_p2p_player_create():
 @app.post("/api/p2p_player/accept")
 def api_p2p_player_accept():
     data = request.get_json(silent=True) or {}
-    trade_id = int(data.get("trade_id", 0))
-    user_id = int(data.get("user_id", 0))  # buyer
+    trade_id = as_int(data.get("trade_id"), 0)
+    user_id = as_int(data.get("user_id"), 0)  # buyer
 
     if not trade_id or not user_id:
         return jsonify({"ok": False, "error": "bad_params"}), 400
@@ -887,8 +920,8 @@ def api_p2p_player_accept():
 @app.post("/api/p2p_player/cancel")
 def api_p2p_player_cancel():
     data = request.get_json(silent=True) or {}
-    trade_id = int(data.get("trade_id", 0))
-    user_id = int(data.get("user_id", 0))  # seller
+    trade_id = as_int(data.get("trade_id"), 0)
+    user_id = as_int(data.get("user_id"), 0)  # seller
 
     if not trade_id or not user_id:
         return jsonify({"ok": False, "error": "bad_params"}), 400
@@ -989,3 +1022,6 @@ def api_vip():
 
 # Run locally:
 # flask --app server run --debug
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=as_int(os.environ.get("PORT"), 5000), debug=False)

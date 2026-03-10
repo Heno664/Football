@@ -319,12 +319,24 @@
   });
 
   async function api(path, method='GET', body=null){
-    const opt = { method, headers: {'Content-Type':'application/json'} };
-    if(body) opt.body = JSON.stringify(body);
-    const r = await fetch(path, opt);
-    const j = await r.json().catch(()=>({ok:false,error:'bad_json'}));
-    if(!r.ok) throw j;
-    return j;
+    try{
+      const opt = { method, headers: {'Content-Type':'application/json'} };
+      if(body) opt.body = JSON.stringify(body);
+      const r = await fetch(path, opt);
+      const text = await r.text();
+      let j = null;
+      try {
+        j = text ? JSON.parse(text) : {};
+      } catch {
+        j = { ok:false, error:'bad_json', raw:text.slice(0,200) };
+      }
+      if(!r.ok) throw j;
+      if(!j || typeof j !== 'object') throw {ok:false,error:'bad_json'};
+      return j;
+    }catch(e){
+      if(e?.error) throw e;
+      throw { ok:false, error:'network_error', detail:String(e?.message || e) };
+    }
   }
 
   function getTelegramUser(){
@@ -718,6 +730,10 @@
   // Market sell
   $('sellBtn').onclick = async ()=>{
     try{
+      if(!$('sellPlayer').value){
+        showToast('marketToast','❌ Нет игрока для продажи');
+        return;
+      }
       showToast('marketToast','Выставляю...');
       await api('/api/market/sell','POST',{
         user_id:userId,
@@ -745,6 +761,7 @@
       showToast('p2pToast','Создаю сделку...');
       const buyer = Number(($('p2pBuyer').value||'').trim());
       if(!buyer) { showToast('p2pToast','❌ Введи buyer ID'); return; }
+      if(!$('p2pPlayer').value){ showToast('p2pToast','❌ Нет игрока для сделки'); return; }
 
       const j = await api('/api/p2p_player/create','POST',{
         seller_id:userId,
