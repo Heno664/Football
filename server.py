@@ -10,6 +10,7 @@ from flask import Flask, request, jsonify, send_from_directory
 # Config (ENV)
 # =========================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+PROVIDER_TOKEN = os.environ.get("PROVIDER_TOKEN", "")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "")  # e.g. https://your-app.up.railway.app/web/index.html
 P2P_PLAYER_FEE_PCT = 3  # buyer fee %
 DAILY_COINS = 200
@@ -140,6 +141,7 @@ def init_db():
     cur.execute("PRAGMA table_info(users)")
     users_cols = [r[1] for r in cur.fetchall()]
     if users_cols and "user_id" not in users_cols and "id" in users_cols:
+        old_has_pack_credits = "pack_credits" in users_cols
         cur.execute("ALTER TABLE users RENAME TO users_old")
         cur.execute("""
         CREATE TABLE users (
@@ -153,18 +155,32 @@ def init_db():
             created_at INTEGER DEFAULT (strftime('%s','now'))
         )
         """)
-        cur.execute("""
-        INSERT INTO users (user_id, username, club_id, club_name, coins, last_daily, pack_credits)
-        SELECT
-            id,
-            '',
-            0,
-            COALESCE(club_custom, ''),
-            COALESCE(coins, 0),
-            COALESCE(last_daily, 0),
-            COALESCE(pack_credits, 0)
-        FROM users_old
-        """)
+        if old_has_pack_credits:
+            cur.execute("""
+            INSERT INTO users (user_id, username, club_id, club_name, coins, last_daily, pack_credits)
+            SELECT
+                id,
+                '',
+                0,
+                COALESCE(club_custom, ''),
+                COALESCE(coins, 0),
+                COALESCE(last_daily, 0),
+                COALESCE(pack_credits, 0)
+            FROM users_old
+            """)
+        else:
+            cur.execute("""
+            INSERT INTO users (user_id, username, club_id, club_name, coins, last_daily, pack_credits)
+            SELECT
+                id,
+                '',
+                0,
+                COALESCE(club_custom, ''),
+                COALESCE(coins, 0),
+                COALESCE(last_daily, 0),
+                0
+            FROM users_old
+            """)
         cur.execute("DROP TABLE users_old")
 
     conn.close()
@@ -398,8 +414,11 @@ def health():
 
 @app.get("/")
 def root():
-    # helpful default
-    return jsonify({"ok": True, "web": "/web/index.html", "webhook": "/webhook"})
+    return send_from_directory("web", "index.html")
+
+@app.get("/game")
+def game():
+    return send_from_directory("web", "index.html")
 
 @app.get("/web/index.html")
 def web_index():
@@ -409,33 +428,8 @@ def web_index():
 def webhook():
     upd = request.get_json(silent=True) or {}
 
-    # 1) messages
-    msg = upd.get("message") or upd.get("edited_message")
-    if msg:
-        chat_id = msg["chat"]["id"]
-        from_user = msg.get("from", {})
-        user_id = int(from_user.get("id", 0))
-        username = from_user.get("username") or (from_user.get("first_name", "") + " " + from_user.get("last_name", "")).strip()
-
-        if user_id:
-            ensure_user(user_id, username)
-
-        text = (msg.get("text") or "").strip().lower()
-        if text == "/start":
-            if not WEBAPP_URL:
-                tg_send_message(chat_id, "⚠️ WEBAPP_URL не задан в Railway Variables.\nНужно: https://.../web/index.html")
-            else:
-                keyboard = {
-                    "inline_keyboard": [[{
-                        "text": "Играть ⚽",
-                        "web_app": {"url": WEBAPP_URL}
-                    }]]
-                }
-                tg_send_message(chat_id, "Привет! Нажми «Играть» чтобы открыть игру 👇", keyboard)
-
-        return jsonify({"ok": True})
-
-    # 2) successful payment (Stars)
+    # successful payment should be processed before generic message handler,
+    # otherwise it gets swallowed by early return.
     sp = upd.get("message", {}).get("successful_payment")
     if sp:
         from_user = upd["message"].get("from", {})
@@ -490,7 +484,55 @@ def webhook():
         tg_send_message(upd["message"]["chat"]["id"], "\n".join(lines) if lines else "Оплата получена ✅")
         return jsonify({"ok": True})
 
+    # 1) messages
+    msg = upd.get("message") or upd.get("edited_message")
+    if msg:
+        chat_id = msg["chat"]["id"]
+        from_user = msg.get("from", {})
+        user_id = int(from_user.get("id", 0))
+        username = from_user.get("username") or (from_user.get("first_name", "") + " " + from_user.get("last_name", "")).strip()
+
+        if user_id:
+            ensure_user(user_id, username)
+
+        text = (msg.get("text") or "").strip().lower()
+        if text == "/start":
+            if not WEBAPP_URL:
+                tg_send_message(chat_id, "⚠️ WEBAPP_URL не задан в Railway Variables.\nНужно: https://.../web/index.html")
+            else:
+                keyboard = {
+                    "inline_keyboard": [[{
+                        "text": "Играть ⚽",
+                        "web_app": {"url": WEBAPP_URL}
+                    }]]
+                }
+                tg_send_message(chat_id, "Привет! Нажми «Играть» чтобы открыть игру 👇", keyboard)
+
+        return jsonify({"ok": True})
+
     return jsonify({"ok": True})
+
+@app.get("/api/config_status")
+def api_config_status():
+    return jsonify({
+        "ok": True,
+        "bot_token": bool(BOT_TOKEN),
+        "provider_token": bool(PROVIDER_TOKEN),
+        "webapp_url": WEBAPP_URL,
+        "webapp_url_valid": WEBAPP_URL.startswith("https://")
+    })
+
+@app.errorhandler(404)
+def handle_404(_):
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": False, "error": "not_found", "path": request.path}), 404
+
+@app.errorhandler(500)
+def handle_500(_):
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "server_error"}), 500
+    return jsonify({"ok": False, "error": "server_error"}), 500
 
 # =========================
 # API: bootstrap / data
@@ -787,7 +829,7 @@ def api_create_invoice():
         "payload": payload,
         "currency": "XTR",
         "prices": [{"label": item["title"], "amount": item["stars"]}],
-        "provider_token": ""
+        "provider_token": PROVIDER_TOKEN
     }
 
     # subscription

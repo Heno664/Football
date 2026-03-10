@@ -321,9 +321,30 @@
   async function api(path, method='GET', body=null){
     const opt = { method, headers: {'Content-Type':'application/json'} };
     if(body) opt.body = JSON.stringify(body);
-    const r = await fetch(path, opt);
-    const j = await r.json().catch(()=>({ok:false,error:'bad_json'}));
-    if(!r.ok) throw j;
+
+    let r;
+    try{
+      r = await fetch(path, opt);
+    }catch(_){
+      throw {ok:false,error:'network_error'};
+    }
+
+    const raw = await r.text();
+    let j = {};
+    if(raw){
+      try{
+        j = JSON.parse(raw);
+      }catch(_){
+        j = {ok:false,error:'invalid_json',status:r.status};
+      }
+    }
+
+    if(!r.ok){
+      throw (j && typeof j === 'object') ? j : {ok:false,error:'http_error',status:r.status};
+    }
+    if(!j || typeof j !== 'object'){
+      return {ok:true};
+    }
     return j;
   }
 
@@ -364,8 +385,10 @@
     if(!view.length){
       box.innerHTML = `<div class="muted">Пока нет игроков. Открывай паки 🎁</div>`;
       if(!inventory.length){
-        $('sellPlayer').innerHTML = '';
-        $('p2pPlayer').innerHTML = '';
+        $('sellPlayer').innerHTML = '<option value="">Нет игроков</option>';
+        $('p2pPlayer').innerHTML = '<option value="">Нет игроков</option>';
+        $('sellPlayer').disabled = true;
+        $('p2pPlayer').disabled = true;
       }
       return;
     }
@@ -390,6 +413,8 @@
     const opts = inventory.map(it=>`<option value="${it.player.id}">${it.player.name} (x${it.qty})</option>`).join('');
     $('sellPlayer').innerHTML = opts;
     $('p2pPlayer').innerHTML = opts;
+    $('sellPlayer').disabled = !opts;
+    $('p2pPlayer').disabled = !opts;
   }
 
   function renderMarket(items){
@@ -436,7 +461,8 @@
           showToast('marketToast','Покупка...');
           await api('/api/market/buy','POST',{user_id:userId, listing_id:Number(b.dataset.buy)});
           showToast('marketToast','✅ Куплено!');
-          await refreshAll();
+          await loadConfigStatus();
+    await refreshAll();
           await loadMarket();
         }catch(e){
           showToast('marketToast','❌ '+(e.error||e.description||'ошибка'));
@@ -719,9 +745,11 @@
   $('sellBtn').onclick = async ()=>{
     try{
       showToast('marketToast','Выставляю...');
+      const selected = Number($('sellPlayer').value || 0);
+      if(!selected){ showToast('marketToast','❌ Нет игрока для продажи'); return; }
       await api('/api/market/sell','POST',{
         user_id:userId,
-        player_id:Number($('sellPlayer').value),
+        player_id:selected,
         price:Number($('sellPrice').value||0)
       });
       showToast('marketToast','✅ Лот создан');
@@ -746,10 +774,12 @@
       const buyer = Number(($('p2pBuyer').value||'').trim());
       if(!buyer) { showToast('p2pToast','❌ Введи buyer ID'); return; }
 
+      const selected = Number($('p2pPlayer').value || 0);
+      if(!selected){ showToast('p2pToast','❌ Нет игрока для сделки'); return; }
       const j = await api('/api/p2p_player/create','POST',{
         seller_id:userId,
         buyer_id:buyer,
-        player_id:Number($('p2pPlayer').value),
+        player_id:selected,
         price:Number($('p2pPrice').value||0)
       });
       showToast('p2pToast',`✅ Сделка #${j.trade_id} создана (fee ${j.fee})`);
@@ -786,6 +816,21 @@
   $('marketSearch').oninput = ()=>renderMarket(marketItems);
   $('marketMaxPrice').oninput = ()=>renderMarket(marketItems);
 
+  async function loadConfigStatus(){
+    try{
+      const j = await api('/api/config_status');
+      const issues = [];
+      if(!j.bot_token) issues.push('BOT_TOKEN');
+      if(!j.provider_token) issues.push('PROVIDER_TOKEN');
+      if(!j.webapp_url_valid) issues.push('WEBAPP_URL');
+      if(issues.length){
+        showToast('shopToast', `⚠️ Проверь env: ${issues.join(', ')}`);
+      }
+    }catch(_){
+      // ignore
+    }
+  }
+
   // init
   (async ()=>{
     const u = getTelegramUser();
@@ -796,6 +841,7 @@
       alert("Открой через Telegram. Или открой так: /web/index.html?user_id=123&username=test");
       return;
     }
+    await loadConfigStatus();
     await refreshAll();
     await loadMarket();
     await loadP2P();
