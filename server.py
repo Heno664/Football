@@ -4,7 +4,7 @@ import time
 import sqlite3
 import urllib.request
 import urllib.parse
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect
 
 # =========================
 # Config (ENV)
@@ -153,16 +153,22 @@ def init_db():
             created_at INTEGER DEFAULT (strftime('%s','now'))
         )
         """)
-        cur.execute("""
+        cur.execute("PRAGMA table_info(users_old)")
+        old_cols = {r[1] for r in cur.fetchall()}
+        club_expr = "COALESCE(club_custom, '')" if "club_custom" in old_cols else "''"
+        coins_expr = "COALESCE(coins, 0)" if "coins" in old_cols else "0"
+        daily_expr = "COALESCE(last_daily, 0)" if "last_daily" in old_cols else "0"
+        packs_expr = "COALESCE(pack_credits, 0)" if "pack_credits" in old_cols else "0"
+        cur.execute(f"""
         INSERT INTO users (user_id, username, club_id, club_name, coins, last_daily, pack_credits)
         SELECT
             id,
             '',
             0,
-            COALESCE(club_custom, ''),
-            COALESCE(coins, 0),
-            COALESCE(last_daily, 0),
-            COALESCE(pack_credits, 0)
+            {club_expr},
+            {coins_expr},
+            {daily_expr},
+            {packs_expr}
         FROM users_old
         """)
         cur.execute("DROP TABLE users_old")
@@ -398,8 +404,11 @@ def health():
 
 @app.get("/")
 def root():
-    # helpful default
-    return jsonify({"ok": True, "web": "/web/index.html", "webhook": "/webhook"})
+    return redirect("/game", code=302)
+
+@app.get("/game")
+def game():
+    return redirect("/web/index.html", code=302)
 
 @app.get("/web/index.html")
 def web_index():
